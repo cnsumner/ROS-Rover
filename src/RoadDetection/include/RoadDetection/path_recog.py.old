@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+import rospy
+from std_msgs.msg import Int16
+import numpy as np
+import time
+import cv2
+from math import *
+
+def pathfinder():
+    pub = rospy.Publisher('Steering', Int16, queue_size=10)
+    rospy.init_node('RoadDetection', anonymous=True)
+
+    #cap = cv2.VideoCapture(r'/media/sf_Robotics_Class/Rover/src/RoadDetection/src/vid3.mp4')
+    cap = cv2.VideoCapture(0)
+    cap.set(3, 640)
+    cap.set(4, 360)
+    #cap.set(5, 10)
+
+    #while~cap.isOpened():
+    #    print('No good.')
+    #    time.sleep(1)
+
+    cv2.namedWindow('frame', flags=cv2.WINDOW_AUTOSIZE)
+
+    avgCenter = 639/2
+    samples = 0
+
+    fps = 30
+
+    count = 0
+    while (True):
+        start_time = time.time()
+        ret, frame = cap.read()
+
+        count += 1
+
+        if count == 30:
+            count = 0
+            continue
+
+        template = frame[250:500, 200:330]
+        #template = frame
+        rowAvg = np.average(template, axis=0)
+        avg = np.uint8(np.average(rowAvg, axis=0))
+
+        #roi = frame[100:359, 0:639]
+        roi = frame[100:359, 0:639]
+
+        mask = cv2.inRange(roi, avg - [60, 60, 60], avg + [60, 60, 60])
+        mask = np.bitwise_and(cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY), mask)
+
+        blur = cv2.blur(mask, (3,3))
+        canny = cv2.Canny(blur, 20, 100, 10)
+        canny = cv2.dilate(canny, (5,5))
+
+        #lines = cv2.HoughLines(canny, 1, np.pi/180, 200);
+        lines = cv2.HoughLines(canny, 1, np.pi/180, 100)
+
+    ##  lines = cv2.HoughLinesP(canny, 1, np.pi/180, 10, 10000, 10)
+        canny = cv2.cvtColor(canny,cv2.COLOR_GRAY2RGB)
+
+    ##    if type(lines) != type(None):
+    ##        for line in lines:
+    ##            x1 = line[0][0]
+    ##            y1 = line[0][1]
+    ##            x2 = line[0][2]
+    ##            y2 = line[0][3]
+    ##
+    ##            deltaX = x2 - x1
+    ##            deltaY = abs(y2 - y1)
+    ##
+    ##            angle = atan2(deltaY, deltaX) * 180 / np.pi
+    ##
+    ##            #if (60 > angle > 10) | (-10 > angle > -60):
+    ##            if not((190 > angle > 170) | (10 > angle > -10)):
+    ##                print(angle)
+    ##                cv2.line(roi, (x1, y1), (x2, y2), (0, 255, 0))
+
+        try:
+            range = lines.shape[0]
+        except AttributeError:
+            range = 0
+
+        intersections = []
+        for i in xrange(range):
+            for rho, theta in lines[i]:
+                angle = theta * 180 / np.pi
+
+                if not(120 > angle > 70):
+                    a = np.cos(theta)
+                    b = np.sin(theta)
+                    x0 = a * rho
+                    y0 = b * rho
+                    x1 = int(x0 + 1000 * (-b))
+                    y1 = int(y0 + 1000 * (a))
+                    x2 = int(x0 - 1000 * (-b))
+                    y2 = int(y0 - 1000 * (a))
+
+                    cv2.line(roi, (x1, y1), (x2, y2), (0, 255, 0))
+                    x3 = 0
+                    y3 = y4 = 200
+                    x4 = 639
+                    cv2.line(roi, (x3, y3), (x4, y4), (255, 0, 0))
+                    intersectionX = ((x1*y2 - y1*x2)*(x3 - x4) - (x1 - x2)*(x3*y4 - y3*x4)) / ((x1 - x2)*(y3 - y4) - (y1 - y2)*(x3 - x4))
+                    intersectionY = ((x1*y2 - y1*x2)*(y3 - y4) - (y1 - y2)*(x3*y4 - y3*x4)) / ((x1 - x2)*(y3 - y4) - (y1 - y2)*(x3 - x4))
+                    if (intersectionX < 0):
+                        intersectionX = 0
+                    elif (intersectionX > 639):
+                        intersectionX = 639
+                    intersections.append((intersectionX, intersectionY))
+
+        intersections.sort(key=lambda point: point[0])
+        mid = (0, 0)
+        prev = -1
+        for x, y in intersections:
+            if prev == -1:
+                prev = x
+            else:
+                d = x - prev
+                prev = x
+                if d > mid[0]:
+                    mid = (d, (x,y))
+            cv2.circle(roi, (x, y), 4, (0, 0, 255), -1)
+
+        samples += 1
+        if not(mid == (0, 0)):
+            center = mid[1][0] - mid[0]/2
+            avgCenter = (avgCenter*7 + center)/(7 + 1)
+
+            cv2.circle(roi, (avgCenter, 200), 4, (255, 0, 255), -1)
+
+            ##rospy.loginfo(int(320 - avgCenter))
+            pub.publish(int(avgCenter - 320))
+
+        cv2.imshow('frame', roi)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        fps = (fps*5 + 1/(time.time() - start_time))/6
+        rospy.loginfo(fps)
+        #print fps,
+        #print '\r',
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    try:
+        pathfinder()
+    except rospy.ROSInterruptException:
+        pass
