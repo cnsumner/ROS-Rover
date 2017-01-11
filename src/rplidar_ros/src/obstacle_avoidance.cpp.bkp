@@ -1,0 +1,135 @@
+#include <ros/ros.h>
+#include <rplidar.h>
+#include <sensor_msgs/LaserScan.h>
+#include <geometry_msgs/Twist.h>
+#include <std_msgs/Byte.h>
+
+#define RAD2DEG(x) ((x)*180./M_PI)
+
+float dist_data[360];
+float angl_data[360];
+float bubble[360];
+
+ros::Publisher motor_pub;
+ros::Publisher base_pub;
+std_msgs::Byte m_cmd;
+geometry_msgs::Twist bcmd;
+
+void lidarCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
+{
+    float delta_t = scan->scan_time;
+    float vel = 40.5;
+   
+    float aD_sum=0.0;
+    float D_sum=0.0;
+
+    bool obj_found = false;
+
+    //m_cmd.data = 0x40;
+    //motor_pub.publish(m_cmd);
+
+    for(int i = 0; i < 360; i++)
+    {
+        float degree = RAD2DEG(scan->angle_min + scan->angle_increment*i);
+        
+        
+       // if(degree >= 90 || degree <= 110 || degree <= -90 || degree >= -110)
+       // {
+       //     float Ki = 0.1;
+       //     bubble[i] = de;lta_t*vel*Ki;
+       //     ROS_INFO("Bubble: %f", bubble[i]);
+       // }
+       // if(degree >= 111 || degree <= 130 || degree <= -110 || degree >= -130)
+       // {
+       //     float Ki = 1.0;
+       //     bubble[i] = delta_t*vel*Ki;
+       //     ROS_INFO("Bubble: %f", bubble[i]);
+       // }
+       // if(degree >= 131 || degree <= 149 || degree <= -131 || degree >= -149)
+       // {
+       //     float Ki = 1.75;
+       //     bubble[i] = delta_t*vel*Ki;
+       //     ROS_INFO("Bubble: %f", bubble[i]);
+       // }
+       // if(degree >= 150 || degree <= 180 || degree <= -150 || degree >= -180)
+       // {
+       //     float Ki = 3.0; 
+       //     bubble[i] = delta_t*vel*Ki;
+       //     ROS_INFO("Bubble: %f", bubble[i]);
+       // }
+
+
+
+         if(degree >= 90 || degree <= -90)
+         {
+            dist_data[i] = scan->ranges[i];
+            angl_data[i] = degree;
+          
+            bubble[i] = 1.0;
+
+            if(dist_data[i] < bubble[i])
+            {                
+                obj_found = true;
+                //m_cmd.data = 0x70;
+                //motor_pub.publish(m_cmd);
+
+                ROS_INFO("Obstacle detected! Angl: %f, Dist: %f", angl_data[i], dist_data[i]);
+
+                aD_sum += angl_data[i]*dist_data[i];
+                D_sum += dist_data[i];
+                ROS_INFO("aDs: %f, Ds: %f");
+
+                if(angl_data[i] >= 90)
+                {
+                    ROS_INFO("Turning left");
+                    m_cmd.data = 0x0C;
+                    motor_pub.publish(m_cmd);
+                }
+                if(angl_data[i] <= -90)
+                {
+                    ROS_INFO("Turning right");
+                    m_cmd.data = 0x03;
+                    motor_pub.publish(m_cmd);
+                }
+
+                //m_cmd.data = 0x0F;
+                //motor_pub.publish(m_cmd);
+            }
+            //else
+            //    ROS_INFO("Angle: %f, Distance: %f", angl_data[i], dist_data[i]);  
+
+        }
+               
+    }
+    if (obj_found)
+    {
+        m_cmd.data = 0x70;
+        motor_pub.publish(m_cmd);
+    }
+    else
+    {
+        m_cmd.data = 0x0F;
+        motor_pub.publish(m_cmd);
+    }
+
+    float rebound = aD_sum/D_sum;
+    //ROS_INFO("Rebound: %f, aDs: %f, Ds: %f ", rebound, aD_sum, D_sum);
+    
+    //bcmd.angular.z = rebound*M_PI/180;
+    //base_pub.publish(bcmd);
+}
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "obstacle_avoidance");
+
+    ros::NodeHandle nh;
+    //base_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel, 1");
+    
+    motor_pub = nh.advertise<std_msgs::Byte>("/motors2", 1000);
+    ros:: Subscriber sub = nh.subscribe("/scan", 1000, lidarCallback);
+
+    ros::spin();
+    return 0;
+}
+
