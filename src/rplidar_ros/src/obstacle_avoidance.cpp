@@ -1,20 +1,83 @@
+#include <iostream>
+#include <iostream>
 #include <ros/ros.h>
 #include <rplidar.h>
 #include <sensor_msgs/LaserScan.h>
-#include <geometry_msgs/Twist.h>
-#include <std_msgs/Byte.h>
 #include <std_msgs/Float32.h>
 
 #define RAD2DEG(x) ((x)*180./M_PI)
+#define SIZE 10000
 
 float dist_data[360];
 float angl_data[360];
 float bubble[360];
 
 ros::Publisher motor_pub;
-ros::Publisher base_pub;
 std_msgs::Float32 m_cmd;
-geometry_msgs::Twist bcmd;
+
+class Stack
+{
+    private:
+        int top;
+        float S[SIZE];
+
+    public:
+        Stack(){ top = -1; }
+        ~Stack();
+
+        void push(float angl)
+        {
+            if(isfull())
+                ROS_INFO("Stack overflow");
+            else
+            {
+                top++;
+                S[top] = angl;
+            }
+        }
+
+        void pop()
+        {
+            float ang;
+
+            if(isempty())
+                ROS_INFO("Stack empty");
+            else
+                top--;
+        }
+
+        float top_element()
+        {
+            return S[top];
+        }
+
+        bool isfull()
+        {
+            if(top >= SIZE)
+                return true;
+            else
+                return false;
+
+        }
+
+        bool isempty()
+        {
+            if(top == -1)
+                return true;
+            else 
+                return false;
+        }
+
+       // void print()
+       // {
+       //     for(int i = 0; i<=top; i++)
+       //         ROS_INFO("%f", S[i]);
+       // }
+};
+
+
+Stack *mystack = new Stack();
+
 
 void lidarCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
@@ -46,48 +109,50 @@ void lidarCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
                 ROS_INFO("degree: %f, dist: %f", degree, dist_data[i]);
 
                 // TODO::move the ifs to the outside after using the rebound angle to calculate the trajectory
-                //if(angl_data[i] >= 90)
-                //{
-                //    ROS_INFO("Turning left");
-                //    m_cmd.data = 0x0C;
-                //    motor_pub.publish(m_cmd);
-                //}
-                //if(angl_data[i] <= -90)
-                //{
-                //    ROS_INFO("Turning right");
-                //    m_cmd.data = 0x03;
-                //    motor_pub.publish(m_cmd);
-                //}
             }
         }
                
     }
 
-
+    
+    float rebound = 0;
+    
     if (obj_found)
     {
-        float rebound = aD_sum/D_sum;
+        rebound = aD_sum/D_sum;
         //ROS_INFO("Rebound: %f, aDs: %f, Ds: %f ", rebound, aD_sum, D_sum);
         ROS_INFO("Rebound degrees: %f", RAD2DEG(rebound));
         
         //m_cmd.data = 0x70;
+        
+        mystack->push(rebound);
+
         m_cmd.data = rebound;
         motor_pub.publish(m_cmd);
+
+        //ros::Duration(5.0);
     }
     else
     {
-        float rebound = 0;
+        
         //m_cmd.data = 0x0F;
-        m_cmd.data = rebound;
+        if(mystack->isempty())
+            mystack->push(rebound);
+        else
+            rebound = mystack->top_element();   
+        
+        m_cmd.data =  0 - rebound;
         motor_pub.publish(m_cmd);
+
+        mystack->pop();
     }
     
-    //bcmd.angular.z = rebound*M_PI/180;
-    //base_pub.publish(bcmd);
+
 }
 
 int main(int argc, char** argv)
 {
+
     for (int i=0; i<180; i++)
     {
         if (i>89)
@@ -109,7 +174,6 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "obstacle_avoidance");
 
     ros::NodeHandle nh;
-    //base_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel, 1");
     
     motor_pub = nh.advertise<std_msgs::Float32>("/motors2", 1000);
     ros:: Subscriber sub = nh.subscribe("/scan", 1000, lidarCallback);

@@ -12,11 +12,11 @@ from sensor_msgs.msg import Image
 
 def pathfinder():
     rospy.init_node('imgCapture', anonymous=True, disable_signals=True)
-    pub = rospy.Publisher("imgFrame", Image, queue_size=10)
+    pub = rospy.Publisher("imgFrame", Image, queue_size=1)
 
     cam = PiCamera()
     cam.resolution = (640, 360)
-    cam.framerate = 3
+    cam.framerate = 10
     cap = PiRGBArray(cam, size=(640, 360))
     cap.truncate(0)
 

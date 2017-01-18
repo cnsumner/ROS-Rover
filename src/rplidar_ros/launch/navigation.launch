@@ -8,8 +8,8 @@
   </node-->
   
   <node name="motors"      pkg="rplidar_ros"   type="motors" output="screen"></node>
-  <node name="path_recog"  pkg="RoadDetection" type="path_recog.py" output="screen"></node>
-  <node name="imgCapture" pkg="RoadDetection" type="imgCapture.py" output="screen"></node>
+  <!--<node name="path_recog"  pkg="RoadDetection" type="path_recog.py" output="screen"></node>-->
+  <!--<node name="imgCapture" pkg="RoadDetection" type="imgCapture.py" output="screen"></node>-->
   <node name="avoidance"   pkg="rplidar_ros"   type="obstacle" output="screen"></node>
   <node name="lidar"       pkg="rplidar_ros"   type="rplidarNode" output="screen"></node>
 </launch>

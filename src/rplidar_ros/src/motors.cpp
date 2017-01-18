@@ -20,16 +20,27 @@ void sendCommand(unsigned char data)
 	data = 0x00;
 
 	if (!digitalRead(3))
-		data = 0xC0;
+	{
+	    data = 0x80;
+            ROS_INFO("Stopped Forward");
+	}
 	else if (!digitalRead(12))
-		data = 0x30;	
+	{
+	    data = 0x30;	
+            ROS_INFO("Stopped - reverse");
+	}
 
     	if (!digitalRead(13))
-		data |= 0x0C;
+	{
+	    data |= 0x0C;
+            ROS_INFO("Stopped - right");
+	}
 	else if (!digitalRead(14))
-		data |= 0x03;
+	{
+            ROS_INFO("Stopped - left");
+	    data |= 0x03;
+	}
 
-        ROS_INFO("Stopped");
         stop = true;
     }
     else
@@ -48,7 +59,9 @@ void sendCommand(unsigned char data)
 
 void avoidCallback(const std_msgs::Float32::ConstPtr& cmd)
 {
-    if (cmd->data == 0)
+//if (cmd->data == 0)
+    if (true)
+        sendCommand(0x00);
         return;
     
     if (cmd->data < -80)

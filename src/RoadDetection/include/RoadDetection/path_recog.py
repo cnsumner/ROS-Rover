@@ -18,6 +18,7 @@ class dummy:
     samples = 0
     fps = 30
     count = 0
+    start_time = time.time()
 
     def pathfinder(self):
 
@@ -27,6 +28,17 @@ class dummy:
         cv2.destroyAllWindows()
 
     def callback(self,data):
+        self.count += 1
+        curr_time = time.time()
+        if curr_time - self.start_time >= 1:
+            if self.count < 4:
+                print "SKIPPING FRAME!!!!"
+                return
+            self.count = 0
+            self.start_time = curr_time
+            return
+            
+        start_time = time.time()
         image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
         ##############################
@@ -34,20 +46,22 @@ class dummy:
         start_time = time.time()
         #ret, image = cap.read()
 
-        template = image[250:500, 200:330]
+        #template = image[250:500, 200:330]
         #template = frame
-        rowAvg = np.average(template, axis=0)
-        avg = np.uint8(np.average(rowAvg, axis=0))
+
+        #rowAvg = np.average(template, axis=0)
+        #avg = np.uint8(np.average(rowAvg, axis=0))
 
         #roi = image[100:359, 0:639]
         roi = image[200:359, 0:639]
 
-        mask = cv2.inRange(roi, avg - [60, 60, 60], avg + [60, 60, 60])
-        mask = np.bitwise_and(cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY), mask)
+        #mask = cv2.inRange(roi, avg - [60, 60, 60], avg + [60, 60, 60])
+        #mask = np.bitwise_and(cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY), mask)
+
         #mask = np.bitwise_and(roi, mask)
 
-        blur = cv2.blur(roi, (5,5))
-        canny = cv2.Canny(blur, 20, 100, 10)
+        roi = cv2.blur(roi, (5,5))
+        canny = cv2.Canny(roi, 20, 100, 10)
         canny = cv2.dilate(canny, (5,5))
 
         #lines = cv2.HoughLines(canny, 1, np.pi/180, 200);
@@ -72,7 +86,7 @@ class dummy:
             for rho, theta in lines[i]:
                 angle = theta * 180 / np.pi
 
-                if not(100 > angle > 80) and not(10 > angle):
+                if not(100 > angle > 80) and not(5 > angle):
                     a = np.cos(theta)
                     b = np.sin(theta)
                     x0 = a * rho
@@ -93,8 +107,9 @@ class dummy:
                     intersections.append((intersectionX, intersectionY))
 
         intersections.sort(key=lambda point: point[0])
-        intersections.insert(0, (0, 200))
-        intersections.insert(0, (639, 200))
+        intersections.insert(0, (1, 200))
+        intersections.insert(len(intersections), (638, 200))
+        print intersections
         mid = (0, 0)
         prev = -1
         for x, y in intersections:
@@ -134,9 +149,13 @@ class dummy:
 
         ##############################
 
-        #cv2.imshow('frame', roi)
-        #if cv2.waitKey(1) & 0xFF == ord('q'):
-        #    return
+        end_time = time.time()
+
+        print 1/(end_time - start_time)
+
+        cv2.imshow('frame', roi)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return
 
     def listener(self):
         rospy.init_node('RoadDetection', anonymous=True, disable_signals=True)
